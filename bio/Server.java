@@ -1,31 +1,55 @@
 package bio;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.InputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class Server {
-    public static void main(String[] args) throws IOException {
-        try (ServerSocket serverSocket = new ServerSocket(8080)) {
-            System.out.println("Server is running on port 8080");
+    public static void main(String[] args) {
+        AtomicReference<ServerSocket> serverSocketRef = new AtomicReference<>();
+        try {
+            ServerSocket serverSocket = new ServerSocket(12345);
+            serverSocketRef.set(serverSocket);
+            System.out.println("Server is running on port 12345");
 
-            while (true) {
-                Socket clientSocket = serverSocket.accept();
-                System.out.println("Client connected");
+            // Add shutdown hook
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                try {
+                    ServerSocket socket = serverSocketRef.get();
+                    if (socket != null && !socket.isClosed()) {
+                        System.out.println("Shutting down server...");
+                        socket.close();
+                        System.out.println("Server has been closed");
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }));
 
-                new Thread(() -> {
+            new Thread(() -> {
+                // Main server loop
+                while (true) {
                     try {
-                        BufferedReader reader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-
-                        String message = reader.readLine();
-                        System.out.println("Received message: " + message);
+                        Socket socket = serverSocket.accept();
+                        new Thread(() -> {
+                            try {
+                                int len;
+                                byte[] buffer = new byte[1024];
+                                InputStream inputStream = socket.getInputStream();
+                                while ((len = inputStream.read(buffer)) != -1) {
+                                    System.out.println(new String(buffer, 0, len));
+                                }
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                        }).start();
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
-                }).start();
-            }
+                }
+            }).start();
         } catch (IOException e) {
             e.printStackTrace();
         }
